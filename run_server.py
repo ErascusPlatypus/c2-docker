@@ -3,7 +3,7 @@ Entry point for the C2 server
 """
 import logging
 from flask import Flask
-from server.routes import register_routes
+from srvr.routes import register_routes
 from config.settings import SERVER_HOST, SERVER_PORT, SSL_CERT, SSL_KEY, LOG_LEVEL, LOG_FORMAT
 
 def create_app():

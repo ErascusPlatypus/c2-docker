@@ -20,7 +20,7 @@ COOKIE_HTTPONLY = True
 COOKIE_SAMESITE = "Strict"
 
 # C2 server address to be updated in production
-C2_SERVER = "https://C2_IP"  # Use actual IP/domain in production
+C2_SERVER = "https://127.0.0.1:443"  # Use actual IP/domain in production
 
 # Logging settings
 LOG_LEVEL = "INFO"
