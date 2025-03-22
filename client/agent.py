@@ -67,11 +67,9 @@ def execute_command(cmd):
             data['code'] = 0
             return data
 
-        # Get OS info
         os_info = find_os()
         os_type = os_info.get('type')
 
-        # Execute command based on OS
         if os_type == 'windows':
             process = subprocess.run(
                 ['cmd.exe', '/c', decoded_cmd],
@@ -93,7 +91,6 @@ def execute_command(cmd):
             data['error'] = f'Unsupported OS={os_type}'
             return data
 
-        # Process results
         data['output'] = process.stdout.strip()
         data['error'] = process.stderr.strip()
         data['code'] = process.returncode
