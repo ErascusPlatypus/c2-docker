@@ -11,6 +11,11 @@ from core.commands import get_commands_for_os
 from core.crypto import generate_token, generate_nonce, base64_encode
 from config.settings import COOKIE_SECURE, COOKIE_HTTPONLY, COOKIE_SAMESITE
 from core.crypto import hash_challenge
+from config.settings import SHARED_SECRET
+
+import functools
+from flask import request, Response
+import os
 
 agent_manager = AgentManager()
 
@@ -72,6 +77,13 @@ def register_routes(app):
             logging.error(f"Error processing agent check-in: {e}")
             return jsonify({"error": "Invalid request format"}), 400
     
+
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        """Health check endpoint for container orchestration"""
+        return jsonify({"status": "healthy", "timestamp": time.time()}), 200
+
+
     @app.route('/verify', methods=['POST'])
     def verify():
         """
@@ -105,7 +117,7 @@ def register_routes(app):
             
             if client_response:
                 ############# replace with secure KMS in future ###################
-                shared_secret = "uacneQWE1AKfjf" 
+                shared_secret = SHARED_SECRET
                 
                 expected_response = hash_challenge(
                     challenge=server_challenge,
@@ -214,6 +226,20 @@ def register_routes(app):
 
 
 # ---------------- ADMIN SECTION ------------------ #
+
+    def admin_required(f):
+        @functools.wraps(f)
+        def decorated(*args, **kwargs):
+            auth = request.authorization
+            admin_user = os.environ.get("C2_ADMIN_USER", "admin")
+            admin_pass = os.environ.get("C2_ADMIN_PASS", "changeme")
+            
+            if not auth or auth.username != admin_user or auth.password != admin_pass:
+                return Response(
+                    'Please authenticate to access the admin panel', 401,
+                    {'WWW-Authenticate': 'Basic realm="C2 Admin"'})
+            return f(*args, **kwargs)
+        return decorated
 
 
 ################# add in auth mechanism to get to admin dashboard ####################
