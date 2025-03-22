@@ -10,6 +10,7 @@ from core.models import AgentManager, Command
 from core.commands import get_commands_for_os
 from core.crypto import generate_token, generate_nonce, base64_encode
 from config.settings import COOKIE_SECURE, COOKIE_HTTPONLY, COOKIE_SAMESITE
+from core.crypto import hash_challenge
 
 # Create agent manager instance
 agent_manager = AgentManager()
@@ -113,11 +114,25 @@ def register_routes(app):
                 logging.warning(f"Server challenge mismatch for agent {agent.aid}")
                 return jsonify({"error": "Verification failed"}), 400
             
-            # In a real implementation, also verify the client_response
-            # using a shared secret or asymmetric cryptography
+            if client_response:
+                ############# replace with secure KMS in future ###################
+                shared_secret = "uacneQWE1AKfjf" 
+                
+                expected_response = hash_challenge(
+                    challenge=server_challenge,
+                    shared_secret=shared_secret
+                )
+                
+                if client_response != expected_response:
+                    logging.warning(f"Invalid challenge response from agent {agent.aid}")
+                    agent.verified = False
+
+                    return jsonify({"error": "Invalid challenge response"}), 400
+                else:
+                    agent.verified = True
+            else:
+                logging.warning(f"Missing challenge response from agent {agent.aid}")
             
-            # Mark the agent as verified
-            agent.verified = True
             
             return jsonify({"status": "verified"}), 200
             
@@ -178,34 +193,28 @@ def register_routes(app):
         Endpoint for agents to report command results
         """
         try:
-            # Get token from cookie
             token = request.cookies.get('auth_token')
             if not token:
                 logging.warning('Missing auth cookie in report endpoint')
                 return jsonify({"error": "Missing auth token"}), 400
             
-            # Get agent by token
             agent = agent_manager.get_agent_by_token(token)
             if not agent:
                 logging.warning('Invalid token in report endpoint')
                 return jsonify({"error": "Invalid token"}), 400
             
-            # Get the result data
             data = request.get_json(force=True)
             
-            # Decode the base64 encoded output and error
             output = base64.b64decode(data.get('output', '')).decode('utf-8')
             error = base64.b64decode(data.get('error', '')).decode('utf-8')
             exit_code = data.get('code')
             
-            # Log the results
             logging.info(f"Agent {agent.aid} command result: exit_code={exit_code}")
             if output:
                 logging.info(f"Command output: {output[:100]}{'...' if len(output) > 100 else ''}")
             if error:
                 logging.warning(f"Command error: {error}")
             
-            # Store the results in agent history
             agent.command_history.append({
                 'output': output,
                 'error': error,
@@ -219,10 +228,13 @@ def register_routes(app):
             logging.error(f"Error processing command report: {e}")
             return jsonify({"error": "Invalid report format"}), 400
     
+
+################# add in auth mechanism to get to admin dashboard ####################
     @app.route('/admin/agents', methods=['GET'])
     def list_agents():
         """Admin endpoint to list all registered agents"""
-        # In production, this should be protected with strong authentication
+
+        ############# Add in authentication to get to admin dashboard ####################
         agents_data = []
         for aid, agent in agent_manager.agents.items():
             agents_data.append({
@@ -241,7 +253,6 @@ def register_routes(app):
     @app.route('/admin/agent/<aid>/history', methods=['GET'])
     def agent_history(aid):
         """Admin endpoint to view an agent's command history"""
-        # In production, this should be protected with strong authentication
         agent = agent_manager.get_agent(aid)
         if not agent:
             return jsonify({"error": "Agent not found"}), 404
@@ -255,7 +266,6 @@ def register_routes(app):
     @app.route('/admin/agent/<aid>/queue', methods=['POST'])
     def queue_command(aid):
         """Admin endpoint to add a command to an agent's queue"""
-        # In production, this should be protected with strong authentication
         agent = agent_manager.get_agent(aid)
         if not agent:
             return jsonify({"error": "Agent not found"}), 404

