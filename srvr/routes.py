@@ -14,7 +14,6 @@ from core.crypto import hash_challenge
 from config.settings import SHARED_SECRET
 
 import functools
-from flask import request, Response
 import os
 
 agent_manager = AgentManager()
