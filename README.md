@@ -26,7 +26,7 @@ The framework consists of two main components:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/c2-docker.git
+git clone https://github.com/ErascusPlatypus/c2-docker.git
 cd c2-docker
 
 # Build and run with Docker Compose
@@ -37,7 +37,7 @@ docker-compose up -d
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/c2-dockergit
+git clone https://github.com/Platypusc2-dockergit
 cd c2-docker
 
 # Install dependencies
