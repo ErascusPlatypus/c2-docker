@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   c2server:
     build: .
@@ -9,10 +8,18 @@ services:
       - C2_SERVER_HOST=0.0.0.0
       - C2_SERVER_PORT=443
       - C2_SERVER_URL=https://127.0.0.1:443
-      - C2_SHARED_SECRET=aswqiwn123wedb
+      - C2_SHARED_SECRET=${C2_SHARED_SECRET}
       - C2_LOG_LEVEL=INFO
-      - C2_ADMIN_USER=admin
-      - C2_ADMIN_PASS=secure_password_here
+      - C2_ADMIN_USER=${C2_ADMIN_USER:-admin}
+      - C2_ADMIN_PASS=${C2_ADMIN_PASS}
+      - C2_OBFUSCATION_ENABLED=true
     volumes:
       - ./certs:/app/certs
+      - ./logs:/app/logs
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost:443/health", "--insecure"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
